@@ -1,33 +1,107 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>PathSense MVP</title>
-  <meta charset="utf-8"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
-    html, body { height: 100%; margin: 0; padding: 0; }
+    html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
     #map { height: 100vh; width: 100vw; }
+
+    /* Search Box */
+    #search-box {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+    }
+    #search-box input {
+      padding: 10px 15px;
+      border-radius: 12px;
+      border: none;
+      width: 250px;
+      font-size: 1rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      outline: none;
+    }
+    #search-box button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 12px;
+      background: #3498db;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: 0.2s;
+    }
+    #search-box button:hover { background: #2980b9; }
+
+    /* Popup Styling */
+    .leaflet-popup-content-wrapper {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+    }
+    .leaflet-popup-content b { font-size: 1.1rem; color: #333; }
+    .leaflet-popup-content { font-size: 0.95rem; color: #555; }
   </style>
 </head>
 <body>
+  <div id="search-box">
+    <input type="text" id="location-input" placeholder="Search location...">
+    <button onclick="searchLocation()">Go</button>
+  </div>
   <div id="map"></div>
-  <script>
-    // Initialize map (default view: Delhi)
-    let map = L.map("map").setView([28.61, 77.20], 12);
 
-    // Add OpenStreetMap tiles
+  <script>
+    const map = L.map("map").setView([28.61, 77.20], 12);
+
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap"
+      attribution: "© OpenStreetMap contributors"
     }).addTo(map);
 
-    // Load hazards from Flask/Supabase backend
+    const severityColors = {
+      1: "#2ecc71",
+      2: "#f1c40f",
+      3: "#e67e22",
+      4: "#e74c3c",
+      5: "#8e44ad"
+    };
+
+    let hazardMarkers = [];
+
+    // Load hazards from backend
     async function loadHazards() {
-      let res = await fetch("/list");
-      let hazards = await res.json();
+      const res = await fetch("/list");
+      const hazards = await res.json();
+
+      // Remove existing markers
+      hazardMarkers.forEach(m => map.removeLayer(m));
+      hazardMarkers = [];
+
       hazards.forEach(h => {
-        L.marker([h.lat, h.lon]).addTo(map)
-          .bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`);
+        const color = severityColors[h.severity] || "#3498db";
+        const marker = L.circleMarker([h.lat, h.lon], {
+          radius: 20 + h.severity * 3, // fixed size
+          color: color,
+          fillColor: color,
+          fillOpacity: 0.6,
+          weight: 1
+        }).addTo(map);
+
+        marker.bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`);
+
+        // Hover effect
+        marker.on('mouseover', () => marker.setStyle({ radius: marker.options.radius + 5 }));
+        marker.on('mouseout', () => marker.setStyle({ radius: marker.options.radius }));
+
+        hazardMarkers.push(marker);
       });
     }
 
@@ -35,9 +109,12 @@
 
     // Add hazard on map click
     map.on("click", async (e) => {
-      let desc = prompt("Enter hazard description:");
-      let sev = prompt("Severity (1-5):");
+      const desc = prompt("Enter hazard description:");
+      const sev = prompt("Severity (1-5):");
       if (!desc || !sev) return;
+      const severity = parseInt(sev);
+      if(severity < 1 || severity > 5) { alert("Severity must be 1-5"); return; }
+
       await fetch("/add", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -45,11 +122,29 @@
           lat: e.latlng.lat,
           lon: e.latlng.lng,
           description: desc,
-          severity: parseInt(sev)
+          severity: severity
         })
       });
-      loadHazards(); // reload markers
+
+      loadHazards();
     });
+
+    // Location search using Nominatim
+    async function searchLocation() {
+      const query = document.getElementById("location-input").value;
+      if(!query) return alert("Enter a location!");
+
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      if(!data || data.length === 0) return alert("Location not found");
+
+      const loc = data[0];
+      map.setView([loc.lat, loc.lon], 15);
+      L.popup()
+        .setLatLng([loc.lat, loc.lon])
+        .setContent(`<b>${loc.display_name}</b>`)
+        .openOn(map);
+    }
   </script>
 </body>
 </html>
