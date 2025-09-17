@@ -5,16 +5,85 @@
   <meta charset="utf-8"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Leaflet Geocoder (search box) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+
   <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+    }
     #map { height: 100vh; }
+    .custom-form {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      padding: 12px 18px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 320px;
+    }
+    .custom-form input, .custom-form textarea, .custom-form select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+    }
+    .custom-form button {
+      background: #0078d7;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .custom-form button:hover {
+      background: #005fa3;
+    }
+    .leaflet-control-geocoder {
+      margin-top: 70px !important; /* Push search box below form */
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+
+  <!-- Hazard Submission Form -->
+  <div class="custom-form">
+    <h3>Report Road Hazard</h3>
+    <input type="text" id="desc" placeholder="Hazard description">
+    <select id="sev">
+      <option value="">Select severity</option>
+      <option value="1">1 - Low</option>
+      <option value="2">2</option>
+      <option value="3">3 - Medium</option>
+      <option value="4">4</option>
+      <option value="5">5 - High</option>
+    </select>
+    <input type="file" id="photo" accept="image/*">
+    <button onclick="submitHazard()">Submit</button>
+  </div>
+
   <script>
     let map = L.map('map').setView([28.61, 77.20], 12); // Default: Delhi
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Add search box
+    L.Control.geocoder({
+      defaultMarkGeocode: true
     }).addTo(map);
 
     async function loadHazards() {
@@ -26,22 +95,42 @@
       });
     }
 
-    map.on("click", async (e) => {
-      let desc = prompt("Enter hazard description:");
-      let sev = prompt("Severity 1-5:");
-      if (!desc || !sev) return;
+    let selectedLatLng = null;
+    map.on("click", (e) => {
+      selectedLatLng = e.latlng;
+      alert("Location selected! Now fill the form to report.");
+    });
+
+    async function submitHazard() {
+      if (!selectedLatLng) {
+        alert("Please click on the map to select location first.");
+        return;
+      }
+
+      let desc = document.getElementById("desc").value;
+      let sev = document.getElementById("sev").value;
+      let photo = document.getElementById("photo").files[0];
+
+      if (!desc || !sev) {
+        alert("Please fill description and severity.");
+        return;
+      }
+
+      let formData = new FormData();
+      formData.append("lat", selectedLatLng.lat);
+      formData.append("lon", selectedLatLng.lng);
+      formData.append("description", desc);
+      formData.append("severity", parseInt(sev));
+      if (photo) formData.append("photo", photo);
+
       await fetch("/add", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          lat: e.latlng.lat,
-          lon: e.latlng.lng,
-          description: desc,
-          severity: parseInt(sev)
-        })
+        body: formData
       });
+
+      alert("Hazard submitted successfully!");
       loadHazards();
-    });
+    }
 
     loadHazards();
   </script>
