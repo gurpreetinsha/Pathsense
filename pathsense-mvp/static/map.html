@@ -4,13 +4,14 @@
   <meta charset="UTF-8">
   <title>PathSense MVP</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     html, body { height: 100%; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-    #map { height: 100vh; width: 100vw; }
+    #map { height: 100vh; width: 100vw; transition: background 0.3s; }
 
-    /* Search Box */
+    /* Modern search box with glass effect */
     #search-box {
       position: absolute;
       top: 20px;
@@ -19,6 +20,11 @@
       z-index: 1000;
       display: flex;
       gap: 10px;
+      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,0.2);
+      padding: 10px 15px;
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
     }
     #search-box input {
       padding: 10px 15px;
@@ -26,9 +32,11 @@
       border: none;
       width: 250px;
       font-size: 1rem;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       outline: none;
+      background: rgba(255,255,255,0.4);
+      transition: 0.2s;
     }
+    #search-box input:focus { background: rgba(255,255,255,0.8); }
     #search-box button {
       padding: 10px 15px;
       border: none;
@@ -37,19 +45,42 @@
       color: #fff;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
       transition: 0.2s;
     }
     #search-box button:hover { background: #2980b9; }
 
     /* Popup Styling */
     .leaflet-popup-content-wrapper {
-      background: rgba(255, 255, 255, 0.95);
-      border-radius: 12px;
+      background: rgba(255,255,255,0.9);
+      border-radius: 14px;
       box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      font-size: 0.95rem;
+      color: #333;
     }
-    .leaflet-popup-content b { font-size: 1.1rem; color: #333; }
-    .leaflet-popup-content { font-size: 0.95rem; color: #555; }
+    .leaflet-popup-content b { font-size: 1.1rem; }
+
+    /* Dark mode */
+    body.dark { background: #181818; color: #eee; }
+    body.dark #search-box { background: rgba(30,30,30,0.6); }
+    body.dark #search-box input { background: rgba(50,50,50,0.6); color: #eee; }
+    body.dark .leaflet-popup-content-wrapper { background: rgba(40,40,40,0.9); color: #eee; }
+
+    /* Dark mode toggle */
+    #toggle-mode {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transition: 0.3s;
+    }
+    #toggle-mode:hover { background: #f0f0f0; }
   </style>
 </head>
 <body>
@@ -57,8 +88,11 @@
     <input type="text" id="location-input" placeholder="Search location...">
     <button onclick="searchLocation()">Go</button>
   </div>
+  <button id="toggle-mode" onclick="toggleMode()">Toggle Dark Mode</button>
   <div id="map"></div>
 
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
   <script>
     const map = L.map("map").setView([28.61, 77.20], 12);
 
@@ -74,40 +108,33 @@
       5: "#8e44ad"
     };
 
-    let hazardMarkers = [];
+    const markers = L.markerClusterGroup();
+    map.addLayer(markers);
 
-    // Load hazards from backend
     async function loadHazards() {
       const res = await fetch("/list");
       const hazards = await res.json();
-
-      // Remove existing markers
-      hazardMarkers.forEach(m => map.removeLayer(m));
-      hazardMarkers = [];
+      markers.clearLayers();
 
       hazards.forEach(h => {
         const color = severityColors[h.severity] || "#3498db";
         const marker = L.circleMarker([h.lat, h.lon], {
-          radius: 20 + h.severity * 3, // fixed size
+          radius: 8 + h.severity * 2,
           color: color,
           fillColor: color,
           fillOpacity: 0.6,
           weight: 1
-        }).addTo(map);
+        }).bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`);
 
-        marker.bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`);
-
-        // Hover effect
-        marker.on('mouseover', () => marker.setStyle({ radius: marker.options.radius + 5 }));
+        marker.on('mouseover', () => marker.setStyle({ radius: marker.options.radius + 3 }));
         marker.on('mouseout', () => marker.setStyle({ radius: marker.options.radius }));
 
-        hazardMarkers.push(marker);
+        markers.addLayer(marker);
       });
     }
 
     loadHazards();
 
-    // Add hazard on map click
     map.on("click", async (e) => {
       const desc = prompt("Enter hazard description:");
       const sev = prompt("Severity (1-5):");
@@ -125,15 +152,12 @@
           severity: severity
         })
       });
-
       loadHazards();
     });
 
-    // Location search using Nominatim
     async function searchLocation() {
       const query = document.getElementById("location-input").value;
       if(!query) return alert("Enter a location!");
-
       const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if(!data || data.length === 0) return alert("Location not found");
@@ -144,6 +168,10 @@
         .setLatLng([loc.lat, loc.lon])
         .setContent(`<b>${loc.display_name}</b>`)
         .openOn(map);
+    }
+
+    function toggleMode() {
+      document.body.classList.toggle('dark');
     }
   </script>
 </body>
