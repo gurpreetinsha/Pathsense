@@ -2,58 +2,202 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>PathSense Multi-Map</title>
+  <title>PathSense MVP</title>
+
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css"/>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+
   <style>
-    body { margin:0; font-family: 'Inter', sans-serif; background:#f8f9fa; }
-    .maps-container {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      height: 100vh;
-    }
-    .map {
-      position: relative;
-      width: 100%;
+    /* Global Styles */
+    html, body {
       height: 100%;
-      border: 1px solid #ddd;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
     }
-    .map h3 {
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+      transition: background 0.3s;
+    }
+
+    /* Search Box */
+    #search-box {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,0.2);
+      padding: 10px 15px;
+      border-radius: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    #search-box input {
+      padding: 10px 15px;
+      border-radius: 12px;
+      border: none;
+      width: 250px;
+      font-size: 1rem;
+      outline: none;
+      background: rgba(255,255,255,0.4);
+      transition: 0.2s;
+    }
+
+    #search-box input:focus {
       background: rgba(255,255,255,0.8);
-      padding: 4px 8px;
-      border-radius: 6px;
-      font-size: 14px;
-      z-index: 500;
+    }
+
+    #search-box button {
+      padding: 10px 15px;
+      border: none;
+      border-radius: 12px;
+      background: #3498db;
+      color: #fff;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    #search-box button:hover {
+      background: #2980b9;
+    }
+
+    /* Map Mode Selector */
+    #map-mode {
+      position: absolute;
+      top: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      display: flex;
+      gap: 10px;
+    }
+
+    #map-mode button {
+      padding: 8px 14px;
+      border: none;
+      border-radius: 12px;
+      background: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transition: 0.3s;
+    }
+
+    #map-mode button:hover {
+      background: #f0f0f0;
+    }
+
+    /* Leaflet Popup */
+    .leaflet-popup-content-wrapper {
+      background: rgba(255,255,255,0.9);
+      border-radius: 14px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+      font-size: 0.95rem;
+      color: #333;
+    }
+
+    .leaflet-popup-content b {
+      font-size: 1.1rem;
+    }
+
+    /* Dark Mode */
+    body.dark {
+      background: #181818;
+      color: #eee;
+    }
+
+    body.dark #search-box {
+      background: rgba(30,30,30,0.6);
+    }
+
+    body.dark #search-box input {
+      background: rgba(50,50,50,0.6);
+      color: #eee;
+    }
+
+    body.dark .leaflet-popup-content-wrapper {
+      background: rgba(40,40,40,0.9);
+      color: #eee;
+    }
+
+    body.dark #map-mode button {
+      background: #222;
+      color: #eee;
+    }
+
+    body.dark #map-mode button:hover {
+      background: #333;
+    }
+
+    /* Dark Mode Toggle Button */
+    #toggle-mode {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      z-index: 1000;
+      background: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 8px 14px;
+      cursor: pointer;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      transition: 0.3s;
+    }
+
+    #toggle-mode:hover {
+      background: #f0f0f0;
     }
   </style>
 </head>
+
 <body>
-  <div class="maps-container">
-    <div id="map1" class="map"><h3>General Route</h3></div>
-    <div id="map2" class="map"><h3>Disruptions</h3></div>
-    <div id="map3" class="map"><h3>Vehicle Routes</h3></div>
+  <!-- Search Box -->
+  <div id="search-box">
+    <input type="text" id="location-input" placeholder="Search location...">
+    <button onclick="searchLocation()">Go</button>
   </div>
 
+  <!-- Map Mode Selector -->
+  <div id="map-mode">
+    <button onclick="setMapMode('clean')">Clean Map</button>
+    <button onclick="setMapMode('markers')">Markers Map</button>
+    <button onclick="setMapMode('route')">Route Map</button>
+  </div>
+
+  <!-- Dark Mode Toggle -->
+  <button id="toggle-mode" onclick="toggleMode()">Toggle Dark Mode</button>
+
+  <!-- Map Container -->
+  <div id="map"></div>
+
+  <!-- JS Libraries -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+
   <script>
-    // Common settings
-    const center = [28.61, 77.20];
-    const zoomLevel = 12;
+    // Initialize Map
+    const map = L.map("map").setView([28.61, 77.20], 12);
 
-    // Map 1: General Route
-    const map1 = L.map("map1").setView(center, zoomLevel);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "© OpenStreetMap contributors"
-    }).addTo(map1);
+    }).addTo(map);
 
-    // Map 2: Disruption Hazards
-    const map2 = L.map("map2").setView(center, zoomLevel);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors"
-    }).addTo(map2);
-
+    // Marker Colors
     const severityColors = {
       1: "#2ecc71",
       2: "#f1c40f",
@@ -62,34 +206,120 @@
       5: "#8e44ad"
     };
 
+    const markers = L.markerClusterGroup();
+    map.addLayer(markers);
+
+    let currentMode = 'markers';
+    let routeLayer = null;
+
+    // Load hazards from backend
     async function loadHazards() {
       const res = await fetch("/list");
       const hazards = await res.json();
+      markers.clearLayers();
+
       hazards.forEach(h => {
         const color = severityColors[h.severity] || "#3498db";
-        L.circleMarker([h.lat, h.lon], {
+        const marker = L.circleMarker([h.lat, h.lon], {
           radius: 8 + h.severity * 2,
-          color: color,
+          color,
           fillColor: color,
           fillOpacity: 0.6,
           weight: 1
-        }).bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`)
-          .addTo(map2);
+        }).bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`);
+
+        marker.on('mouseover', () => marker.setStyle({ radius: marker.options.radius + 3 }));
+        marker.on('mouseout', () => marker.setStyle({ radius: marker.options.radius }));
+
+        markers.addLayer(marker);
       });
     }
+
     loadHazards();
 
-    // Map 3: Vehicle-specific Routes
-    const map3 = L.map("map3").setView(center, zoomLevel);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "© OpenStreetMap contributors"
-    }).addTo(map3);
+    // Add hazard on map click
+    map.on("click", async (e) => {
+      if (currentMode !== 'markers') return;
 
-    // Example vehicle routes (mocked demo lines)
-    const bikeRoute = L.polyline([[28.61, 77.20],[28.62,77.21],[28.63,77.22]], {color:"green"}).addTo(map3).bindPopup("Bike Friendly");
-    const carRoute = L.polyline([[28.61, 77.20],[28.60,77.22],[28.59,77.24]], {color:"blue"}).addTo(map3).bindPopup("Car Allowed");
-    const truckRoute = L.polyline([[28.61, 77.20],[28.62,77.18],[28.63,77.16]], {color:"red"}).addTo(map3).bindPopup("Truck Route");
+      const desc = prompt("Enter hazard description:");
+      const sev = prompt("Severity (1-5):");
+      if (!desc || !sev) return;
 
+      const severity = parseInt(sev);
+      if (severity < 1 || severity > 5) {
+        alert("Severity must be 1-5");
+        return;
+      }
+
+      await fetch("/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: e.latlng.lat, lon: e.latlng.lng, description: desc, severity })
+      });
+
+      loadHazards();
+    });
+
+    // Search location
+    async function searchLocation() {
+      const query = document.getElementById("location-input").value;
+      if (!query) return alert("Enter a location!");
+
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+
+      if (!data || !data.length) return alert("Location not found");
+
+      const loc = data[0];
+      map.setView([loc.lat, loc.lon], 15);
+      L.popup().setLatLng([loc.lat, loc.lon]).setContent(`<b>${loc.display_name}</b>`).openOn(map);
+    }
+
+    // Toggle dark mode
+    function toggleMode() {
+      document.body.classList.toggle('dark');
+    }
+
+    // Set map mode
+    function setMapMode(mode) {
+      currentMode = mode;
+      markers.clearLayers();
+
+      if (routeLayer) {
+        map.removeControl(routeLayer);
+        routeLayer = null;
+      }
+
+      if (mode === 'markers') loadHazards();
+
+      if (mode === 'route') {
+        const start = prompt("Enter start location:");
+        const end = prompt("Enter end location:");
+        if (start && end) calculateRoute(start, end);
+      }
+    }
+
+    // Calculate route using OSRM
+    async function calculateRoute(startQuery, endQuery) {
+      const [startData, endData] = await Promise.all([
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(startQuery)}`).then(r => r.json()),
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(endQuery)}`).then(r => r.json())
+      ]);
+
+      if (!startData.length || !endData.length) return alert("Start or end location not found.");
+
+      const start = L.latLng(startData[0].lat, startData[0].lon);
+      const end = L.latLng(endData[0].lat, endData[0].lon);
+
+      if (routeLayer) map.removeControl(routeLayer);
+
+      routeLayer = L.Routing.control({
+        waypoints: [start, end],
+        lineOptions: { styles: [{ color: 'blue', weight: 5 }] },
+        createMarker: (i, wp) => L.marker(wp.latLng),
+        router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' })
+      }).addTo(map);
+    }
   </script>
 </body>
 </html>
