@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>PathSense MVP</title>
+  <meta charset="utf-8"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    #map { height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <script>
+    let map = L.map('map').setView([28.61, 77.20], 12); // Default: Delhi
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    async function loadHazards() {
+      let res = await fetch("/list");
+      let hazards = await res.json();
+      hazards.forEach(h => {
+        L.marker([h[1], h[2]]).addTo(map)
+          .bindPopup(`<b>${h[3]}</b><br>Severity: ${h[4]}`);
+      });
+    }
+
+    map.on("click", async (e) => {
+      let desc = prompt("Enter hazard description:");
+      let sev = prompt("Severity 1-5:");
+      if (!desc || !sev) return;
+      await fetch("/add", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          lat: e.latlng.lat,
+          lon: e.latlng.lng,
+          description: desc,
+          severity: parseInt(sev)
+        })
+      });
+      loadHazards();
+    });
+
+    loadHazards();
+  </script>
+</body>
+</html>
