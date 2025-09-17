@@ -5,186 +5,51 @@
   <meta charset="utf-8"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
-  <!-- Leaflet Geocoder -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
-  <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
-
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
-
   <style>
-    /* Reset + Base */
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: 'Space Grotesk', sans-serif;
-      background: linear-gradient(120deg, #0f2027, #203a43, #2c5364);
-      color: white;
-    }
-    #map { height: 100vh; }
-
-    /* Glassmorphism Form */
-    .custom-form {
-      position: absolute;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(16px) saturate(180%);
-      -webkit-backdrop-filter: blur(16px) saturate(180%);
-      border-radius: 16px;
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      padding: 20px 24px;
-      z-index: 1000;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 340px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
-      transition: all 0.3s ease;
-    }
-    .custom-form:hover {
-      transform: translateX(-50%) scale(1.02);
-    }
-    .custom-form h3 {
-      margin: 0;
-      font-size: 1.4rem;
-      font-weight: 600;
-      text-align: center;
-      color: #fff;
-    }
-    .custom-form input,
-    .custom-form textarea,
-    .custom-form select {
-      width: 100%;
-      padding: 10px 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 0.95rem;
-      outline: none;
-      background: rgba(255, 255, 255, 0.15);
-      color: white;
-      transition: 0.2s;
-    }
-    .custom-form input::placeholder,
-    .custom-form textarea::placeholder {
-      color: rgba(255,255,255,0.7);
-    }
-    .custom-form input:focus,
-    .custom-form select:focus,
-    .custom-form textarea:focus {
-      background: rgba(255,255,255,0.25);
-    }
-    .custom-form button {
-      background: linear-gradient(135deg, #00c6ff, #0072ff);
-      color: white;
-      padding: 12px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 1rem;
-      letter-spacing: 0.5px;
-      transition: 0.3s;
-    }
-    .custom-form button:hover {
-      background: linear-gradient(135deg, #0072ff, #00c6ff);
-      transform: scale(1.03);
-      box-shadow: 0 4px 14px rgba(0, 114, 255, 0.5);
-    }
-
-    /* Move search box */
-    .leaflet-control-geocoder {
-      margin-top: 100px !important;
-    }
-
-    /* Popup styling */
-    .leaflet-popup-content {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.9rem;
-      color: #222;
-    }
+    html, body { height: 100%; margin: 0; padding: 0; }
+    #map { height: 100vh; width: 100vw; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-
-  <!-- Hazard Submission Form -->
-  <div class="custom-form">
-    <h3>🚧 Report Road Hazard</h3>
-    <input type="text" id="desc" placeholder="Describe the hazard">
-    <select id="sev">
-      <option value="">Select severity</option>
-      <option value="1">1 - Low</option>
-      <option value="2">2</option>
-      <option value="3">3 - Medium</option>
-      <option value="4">4</option>
-      <option value="5">5 - High</option>
-    </select>
-    <input type="file" id="photo" accept="image/*">
-    <button onclick="submitHazard()">Submit Hazard</button>
-  </div>
-
   <script>
-    let map = L.map('map').setView([28.61, 77.20], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
+    // Initialize map (default view: Delhi)
+    let map = L.map("map").setView([28.61, 77.20], 12);
+
+    // Add OpenStreetMap tiles
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap"
     }).addTo(map);
 
-    // Search box
-    L.Control.geocoder({
-      defaultMarkGeocode: true
-    }).addTo(map);
-
+    // Load hazards from Flask/Supabase backend
     async function loadHazards() {
       let res = await fetch("/list");
       let hazards = await res.json();
       hazards.forEach(h => {
-        L.marker([h[1], h[2]]).addTo(map)
-          .bindPopup(`<b>${h[3]}</b><br>Severity: ${h[4]}`);
+        L.marker([h.lat, h.lon]).addTo(map)
+          .bindPopup(`<b>${h.description}</b><br>Severity: ${h.severity}`);
       });
-    }
-
-    let selectedLatLng = null;
-    map.on("click", (e) => {
-      selectedLatLng = e.latlng;
-      alert("📍 Location selected! Now fill the form to report.");
-    });
-
-    async function submitHazard() {
-      if (!selectedLatLng) {
-        alert("⚠️ Please click on the map to select location first.");
-        return;
-      }
-
-      let desc = document.getElementById("desc").value;
-      let sev = document.getElementById("sev").value;
-      let photo = document.getElementById("photo").files[0];
-
-      if (!desc || !sev) {
-        alert("⚠️ Please fill description and severity.");
-        return;
-      }
-
-      let formData = new FormData();
-      formData.append("lat", selectedLatLng.lat);
-      formData.append("lon", selectedLatLng.lng);
-      formData.append("description", desc);
-      formData.append("severity", parseInt(sev));
-      if (photo) formData.append("photo", photo);
-
-      await fetch("/add", {
-        method: "POST",
-        body: formData
-      });
-
-      alert("✅ Hazard submitted successfully!");
-      loadHazards();
     }
 
     loadHazards();
+
+    // Add hazard on map click
+    map.on("click", async (e) => {
+      let desc = prompt("Enter hazard description:");
+      let sev = prompt("Severity (1-5):");
+      if (!desc || !sev) return;
+      await fetch("/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lat: e.latlng.lat,
+          lon: e.latlng.lng,
+          description: desc,
+          severity: parseInt(sev)
+        })
+      });
+      loadHazards(); // reload markers
+    });
   </script>
 </body>
 </html>
